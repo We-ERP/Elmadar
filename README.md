@@ -1,217 +1,68 @@
 # 🎓 نظام إدارة المشتركين — مركز المدار
 
-نظام ويب لتسجيل ومتابعة المشتركين والكورسات والدفعات لـ **مركز المدار للتدريب والتأهيل والتنمية**.
+نظام تسجيل ومتابعة المشتركين والكورسات والدفعات.
+- **الكود:** GitHub (المصدر الوحيد)
+- **الـ Backend:** Google Apps Script (متزامن تلقائياً من GitHub)
+- **قاعدة البيانات:** Google Sheets
 
-- **Backend:** Google Apps Script
-- **Database:** Google Sheets
-- **Frontend:** HTML + CSS + JavaScript (RTL، متجاوب)
-
----
-
-## 📁 هيكلية المشروع
-
+## الهيكل
 ```
-al-madar-system/
-├── Code.gs            # الـ Backend (Apps Script)
-├── Index.html         # الواجهة الرئيسية
-├── Styles.html        # التنسيقات (CSS)
-├── JavaScript.html    # منطق الواجهة (Client-side)
-├── README.md          # هذا الملف
-└── assets/
-    └── logo.png       # لوجو المركز (للاستخدام المرجعي والرفع على Drive)
+.clasp.json                  إعدادات clasp (Script ID)
+.github/workflows/deploy.yml  النشر التلقائي عند كل Push
+src/
+  appsscript.json            إعدادات المشروع والـ Web app
+  Code.gs                    الـ Backend
+  Index.html                 الواجهة الرئيسية
+  Styles.html                التنسيقات
+  JavaScript.html            منطق الواجهة
+assets/logo.png              اللوجو
 ```
 
-> ⚠️ ملاحظة مهمة: GitHub هنا مكان **تخزين** الكود فقط. التطبيق بيشتغل من داخل Google Apps Script، فلازم تنقل الملفات لـ Apps Script زي ما هو موضح تحت.
+## الإعداد (مرة واحدة)
 
----
+### 1) إنشاء الشيت والمشروع المرتبط
+1. افتح Google Sheet جديد.
+2. **Extensions → Apps Script**، ومن **Project Settings** انسخ **Script ID**.
+3. ضعه في `.clasp.json` مكان `PUT_YOUR_SCRIPT_ID_HERE`.
 
-## 🗃️ الخطوة 1: تجهيز Google Sheet
+### 2) تفعيل Apps Script API
+افتح `script.google.com/home/usersettings` وفعّل **Google Apps Script API**.
 
-1. افتح [Google Sheets](https://sheets.google.com) وأنشئ ملف جديد، وسمّيه مثلاً `Al-Madar Database`.
-2. لا تحتاج تنشئ الشيتات بإيدك — الكود هيعملها أوتوماتيك في الخطوة 4.
-
-الشيتات اللي هيعملها النظام:
-
-| اسم الشيت | الاستخدام |
-|---|---|
-| `المستخدمين والصلاحيات` | (User ID, Username, Password Hash, Role, Created At) |
-| `المشتركين والكورسات` | (ID, اسم المشترك, اسم الكورس, تكلفة الكورس, الدفعة الأولى, المبلغ المتبقي, تاريخ إضافة الدفعة الأولى, المستخدم الذي أضاف, آخر تحديث) |
-| `سجل الدفعات والتعديلات` | كل حركة (دفعة / تعديل / حذف) بتتسجل هنا |
-| `المرور-الأرشيف` | نسخة من أي صف قبل تعديله أو حذفه (للمتابعة والمراجعة) |
-
-> 📝 اسم شيت الأرشيف اتغير من `المرور/الأرشيف` إلى `المرور-الأرشيف` لأن Google Sheets **مش بيقبل** الرمز `/` في أسماء الشيتات.
-
----
-
-## 🧩 الخطوة 2: فتح Apps Script وإضافة الملفات
-
-1. من الـ Google Sheet: **Extensions → Apps Script**.
-2. هيفتح محرر المشروع، امسح محتوى `Code.gs` الافتراضي.
-3. انسخ محتوى **`Code.gs`** وألصقه في الملف.
-4. اضغط **+ (Add a file) → HTML** وأنشئ 3 ملفات بالأسماء **بالظبط**:
-   - `Index` → الصق محتوى `Index.html`
-   - `Styles` → الصق محتوى `Styles.html`
-   - `JavaScript` → الصق محتوى `JavaScript.html`
-
-> ⚠️ الأسماء لازم تكون `Index` و `Styles` و `JavaScript` **من غير** امتداد `.html` في المحرر، لأن الكود بيستدعيها بالاسم.
-
-5. اضغط **💾 Save**.
-
----
-
-## ⚙️ الخطوة 3: الإعدادات (CONFIG)
-
-في أول `Code.gs` عدّل الإعدادات دي:
-
-```javascript
-const CONFIG = {
-  SPREADSHEET_ID: '',       // سيبه فاضي لو السكريبت جوه الشيت (الطريقة المقترحة)
-  LOGO_URL: '',             // هنحطه في الخطوة 6
-  CENTER_NAME: 'مركز المدار',
-  TIMEZONE: 'Africa/Cairo',
-  SESSION_SECONDS: 6 * 60 * 60,
-  DEFAULT_ADMIN: { username: 'admin', password: 'admin123' }
-};
+### 3) تسجيل الدخول بـ clasp على جهازك
+```bash
+npm install -g @google/clasp
+clasp login
 ```
+هيتعمل ملف `.clasprc.json` في مجلد المستخدم. (ويندوز: `C:\Users\<اسمك>\.clasprc.json`)
 
-- لو السكريبت **مش** جوه الشيت، حط ID الشيت في `SPREADSHEET_ID` (ID هو الجزء اللي بين `/d/` و `/edit` في رابط الشيت).
+### 4) حفظ الصلاحيات كـ Secret في GitHub
+الريبو → **Settings → Secrets and variables → Actions → New repository secret**
+- الاسم: `CLASPRC_JSON`
+- القيمة: محتوى ملف `.clasprc.json` كامل
 
----
+### 5) رفع الكود
+ارفع المشروع على فرع `main`. الـ Action هيشتغل تلقائياً ويرفع الكود للـ Apps Script.
 
-## 🛠️ الخطوة 4: تشغيل الإعداد الأولي (مرة واحدة)
+### 6) أول نشر للـ Web app (مرة واحدة)
+1. من داخل الشيت: **Extensions → Apps Script → Deploy → New deployment → Web app**.
+   - Execute as: **Me**
+   - Who has access: **Anyone**
+2. من **Manage deployments** انسخ **Deployment ID** (بيبدأ بـ `AKfycb...`).
+3. أضفه في GitHub Secrets باسم `DEPLOYMENT_ID`.
 
-1. في محرر Apps Script، من القائمة اختار الدالة **`setupSystem`**.
-2. اضغط **▶ Run**.
-3. أول مرة هيطلب **Authorization**:
-   - اضغط **Review permissions** → اختار حسابك → **Advanced** → **Go to (project) (unsafe)** → **Allow**.
-4. تأكد من الـ **Execution log** إن ظهرت رسالة `✅ تم إعداد النظام بنجاح`.
-5. ارجع للـ Google Sheet، هتلاقي الشيتات الأربعة اتعملت أوتوماتيك، وشيت المستخدمين فيه أول أدمن.
+من الآن كل Push هيحدّث نفس الرابط تلقائياً.
 
-**بيانات الدخول الأولية:**
+### 7) تشغيل الإعداد الأولي للشيتات
+من محرر Apps Script شغّل **`setupSystem`** مرة واحدة، واعمل Allow للصلاحيات.
+لو الشيتات فيها داتا قديمة شغّل **`migrateSheets`** بدلها.
+
+## الدخول الأولي
 - اسم المستخدم: `admin`
 - كلمة المرور: `admin123`
 
-> 🔐 **غيّر كلمة المرور فوراً** — أضف مستخدم أدمن جديد من صفحة "المستخدمين" داخل النظام، ثم احذف حساب `admin` الافتراضي.
+غيّرها فوراً من صفحة المستخدمين بإضافة أدمن جديد وحذف الحساب الافتراضي.
 
----
-
-## 🚀 الخطوة 5: نشر التطبيق (Deploy as Web App)
-
-1. في محرر Apps Script اضغط **Deploy → New deployment**.
-2. اضغط أيقونة ⚙️ بجوار *Select type* واختار **Web app**.
-3. املأ البيانات:
-   - **Description:** `Al-Madar v1`
-   - **Execute as:** `Me (your email)`
-   - **Who has access:** `Anyone` (أو `Anyone with Google account` لو عايز تقيّد)
-4. اضغط **Deploy** ثم **Authorize access** لو طلب.
-5. انسخ **Web app URL** — ده رابط النظام اللي هتفتحه.
-
-> 🔁 **لو عدّلت الكود بعد النشر:** روح **Deploy → Manage deployments → ✏️ Edit → Version: New version → Deploy**. كده الرابط بيفضل نفسه ومش بيتغير.
-
-> 💡 لو عندك رابط Apps Script قديم (زي اللي اتبعت قبل كده)، تقدر تستخدم نفس الرابط بشرط إن الكود الجديد يكون متنشر على **نفس السكريبت** (Manage deployments → New version).
-
----
-
-## 🖼️ الخطوة 6: ربط اللوجو
-
-Apps Script مش بيقدر يقرأ ملفات من جهازك، فالصورة لازم تكون على رابط عام:
-
-1. ارفع `assets/logo.png` على **Google Drive**.
-2. كليك يمين على الملف → **Share** → **General access: Anyone with the link → Viewer**.
-3. انسخ الـ **File ID** من الرابط:
-   `https://drive.google.com/file/d/` **`1AbCdEfGhIjK...`** `/view`
-4. في `Code.gs` حط الرابط بالشكل ده:
-
-```javascript
-LOGO_URL: 'https://drive.google.com/thumbnail?id=1AbCdEfGhIjK...&sz=w600',
-```
-
-5. احفظ، وانشر **New version** كما في الخطوة 5.
-
-> لو اللوجو ما ظهرش، تأكد إن الملف متشارك Anyone with the link. ولو لسه مش بيظهر، جرّب الرابط ده في المتصفح بعد استبدال ID: `https://lh3.googleusercontent.com/d/FILE_ID`.
-
----
-
-## 🔐 الصلاحيات
-
-| الميزة | Admin | User |
-|---|:---:|:---:|
-| عرض الكورسات والمشتركين | ✅ | ✅ |
-| إضافة مشترك جديد | ✅ | ✅ |
-| تسجيل دفعة جديدة | ✅ | ✅ |
-| تعديل بيانات مشترك | ✅ | ❌ |
-| حذف مشترك | ✅ | ❌ |
-| إضافة / حذف مستخدمين | ✅ | ❌ |
-| سجل الدفعات والتعديلات | ✅ | ❌ |
-| المرور / الأرشيف | ✅ | ❌ |
-
-- كلمات المرور متخزنة **مشفرة (SHA-256)** ومش بتظهر في الشيت بشكل مفهوم.
-- الجلسة بتفضل **6 ساعات**، وبعدها المستخدم بيرجع يسجل دخول.
-
----
-
-## 🧮 منطق الحسابات
-
-- **المتبقي** = تكلفة الكورس − الدفعة الأولى (عند الإضافة).
-- كل دفعة جديدة بتخصم من **المتبقي** وبتتسجل في سجل الدفعات.
-- عند تعديل التكلفة، النظام بيحسب المتبقي الجديد = التكلفة الجديدة − المدفوع حتى الآن.
-- كل كورس بيظهر ككارت مستقل فيه عدد المشتركين والمحصّل والمتبقي ونسبة التحصيل.
-
----
-
-## 🔄 ترحيل النسخة القديمة (لو عندك داتا قبل التحديث)
-
-1. في محرر Apps Script شغّل الدالة **`migrateSheets`** مرة واحدة.
-2. ده بيضيف أعمدة **طريقة الدفع** و**الإثبات** للشيتات الموجودة من غير ما يمسح الداتا.
-3. انشر **New version** من Manage deployments.
-
----
-
-## 🧪 تجربة سريعة
-
-1. افتح رابط النظام وسجّل دخول بحساب الأدمن.
-2. اضغط **+ مشترك جديد** وأضف مشترك بكورس معين.
-3. ارجع للرئيسية، هتلاقي كارت الكورس اتعمل.
-4. اضغط **دفعة** على المشترك وسجل مبلغ، وشوف المتبقي اتحدّث.
-5. من صفحة **سجل الدفعات** تقدر تتابع كل الحركات.
-
----
-
-## 📤 رفع المشروع على GitHub
-
-```bash
-git init
-git add .
-git commit -m "Initial commit: Al-Madar enrollment system"
-git branch -M main
-git remote add origin https://github.com/<username>/al-madar-system.git
-git push -u origin main
-```
-
-أو من الموقع: **New repository → Upload files** واسحب الملفات دي.
-
----
-
-## 🩺 حل المشاكل الشائعة
-
-| المشكلة | الحل |
-|---|---|
-| `الشيت غير موجود` | شغّل `setupSystem()` من المحرر مرة واحدة. |
-| `Unexpected token` أو الصفحة بيضاء | اتأكد إن أسماء ملفات HTML هي `Index` و `Styles` و `JavaScript` بالظبط. |
-| `انتهت الجلسة` | سجّل الدخول من جديد (الجلسة 6 ساعات). |
-| الكود اتغير والنتيجة ما اتغيرتش | انشر **New version** في Manage deployments. |
-| اللوجو مش ظاهر | تأكد إن الملف Anyone with the link، وإن `LOGO_URL` صح. |
-| `Exception: Service invoked too many times` | Apps Script له حدود يومية، استنى شوية أو راجع الاستخدام. |
-
----
-
-## 🔒 ملاحظات أمان
-
-- غيّر حساب `admin` الافتراضي فوراً.
-- لو النظام هيتعمل فيه استخدام واسع، فكّر تقيّد **Who has access** بـ `Anyone with Google account` بدل `Anyone`.
-- ما تشاركش رابط الـ Google Sheet مع حد خارج الفريق.
-- ممكن تضيف تغيير كلمة المرور من الواجهة لاحقاً كتحسين.
-
----
-
-© مركز المدار للتدريب والتأهيل والتنمية — جميع الحقوق محفوظة.
+## ملاحظات
+- لا تعدّل الكود داخل Apps Script مباشرة، عدّل على GitHub دائماً عشان ما يحصلش تضارب.
+- `CLASPRC_JSON` فيه صلاحيات حسابك، ما تنشرهوش أبداً.
+- الرابط الخاص بالنظام هو رابط **Web app** من Apps Script (`script.google.com/macros/s/.../exec`)، ومش رابط GitHub Pages.
