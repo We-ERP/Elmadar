@@ -66,3 +66,11 @@ clasp login
 - لا تعدّل الكود داخل Apps Script مباشرة، عدّل على GitHub دائماً عشان ما يحصلش تضارب.
 - `CLASPRC_JSON` فيه صلاحيات حسابك، ما تنشرهوش أبداً.
 - الرابط الخاص بالنظام هو رابط **Web app** من Apps Script (`script.google.com/macros/s/.../exec`)، ومش رابط GitHub Pages.
+
+## 🔗 رابط النظام
+```
+https://script.google.com/macros/s/AKfycbxHhFkgmM8cimDrVCEYD7j-PGNNrQNQP7YkbkSCWEn5tsTdHPPuvozWwvvHV631vFmz5w/exec
+```
+الرابط ده بتفتحه في المتصفح عشان تدخل على النظام. ملوش علاقة بالكود، والكود ما بيستخدموش.
+
+> ⚠️ لو الرابط ظهر فيه `No HTML file named Index`، يبقى الكود اللي على الـ deployment ده ما فيهوش ملفات الواجهة. الحل إنك ترفع الكود بالـ Workflow (Push على `main`) والـ deployment يتحدّث.
