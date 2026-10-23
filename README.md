@@ -1,76 +1,44 @@
 # 🎓 نظام إدارة المشتركين — مركز المدار
 
-نظام تسجيل ومتابعة المشتركين والكورسات والدفعات.
-- **الكود:** GitHub (المصدر الوحيد)
-- **الـ Backend:** Google Apps Script (متزامن تلقائياً من GitHub)
-- **قاعدة البيانات:** Google Sheets
+- **الواجهة (HTML/CSS/JS):** GitHub Pages — الملفات في الجذر.
+- **الـ API:** Google Apps Script — مكان الكود في `apps-script/Code.gs`.
+- **قاعدة البيانات:** Google Sheets.
 
 ## الهيكل
 ```
-.clasp.json                  إعدادات clasp (Script ID)
-.github/workflows/deploy.yml  النشر التلقائي عند كل Push
-src/
-  appsscript.json            إعدادات المشروع والـ Web app
-  Code.gs                    الـ Backend
-  Index.html                 الواجهة الرئيسية
-  Styles.html                التنسيقات
-  JavaScript.html            منطق الواجهة
-assets/logo.png              اللوجو
+index.html          الواجهة الرئيسية
+styles.css          التنسيقات
+app.js              منطق الواجهة (بيكلم الـ API)
+config.js           رابط الـ API
+assets/logo.png     اللوجو
+apps-script/Code.gs الـ API (بيتنسخ في Apps Script)
 ```
 
-## الإعداد (مرة واحدة)
+## 1) الـ API (Apps Script) — مرة واحدة ولأي تعديل في الكود
+1. افتح الشيت → **Extensions → Apps Script**.
+2. امسح محتوى `Code.gs` وانسخ محتوى `apps-script/Code.gs` والصقه، واحفظ.
+3. شغّل **`setupSystem`** مرة واحدة (أول مرة بس) واعمل Allow للصلاحيات.
+4. **Deploy → Manage deployments → ✏️ Edit → Version: New version → Deploy**.
+   (الرابط بيفضل نفسه، فمش محتاج تغيّر `config.js`.)
 
-### 1) إنشاء الشيت والمشروع المرتبط
-1. افتح Google Sheet جديد.
-2. **Extensions → Apps Script**، ومن **Project Settings** انسخ **Script ID**.
-3. ضعه في `.clasp.json` مكان `PUT_YOUR_SCRIPT_ID_HERE`.
+لو الشيتات فيها داتا قديمة، شغّل **`migrateSheets`** بدل `setupSystem`.
 
-### 2) تفعيل Apps Script API
-افتح `script.google.com/home/usersettings` وفعّل **Google Apps Script API**.
+## 2) الواجهة (GitHub Pages)
+1. ارفع الملفات على GitHub (فرع `main`).
+2. **Settings → Pages → Source: Deploy from a branch → Branch: main / (root) → Save.**
+3. بعد دقيقة هتلاقي الرابط: `https://<username>.github.io/<repo>/`
 
-### 3) تسجيل الدخول بـ clasp على جهازك
-```bash
-npm install -g @google/clasp
-clasp login
-```
-هيتعمل ملف `.clasprc.json` في مجلد المستخدم. (ويندوز: `C:\Users\<اسمك>\.clasprc.json`)
+التعديلات على الواجهة (HTML/CSS/JS) بتظهر أوتوماتيك بعد أي Push.
 
-### 4) حفظ الصلاحيات كـ Secret في GitHub
-الريبو → **Settings → Secrets and variables → Actions → New repository secret**
-- الاسم: `CLASPRC_JSON`
-- القيمة: محتوى ملف `.clasprc.json` كامل
-
-### 5) رفع الكود
-ارفع المشروع على فرع `main`. الـ Action هيشتغل تلقائياً ويرفع الكود للـ Apps Script.
-
-### 6) أول نشر للـ Web app (مرة واحدة)
-1. من داخل الشيت: **Extensions → Apps Script → Deploy → New deployment → Web app**.
-   - Execute as: **Me**
-   - Who has access: **Anyone**
-2. من **Manage deployments** انسخ **Deployment ID** (بيبدأ بـ `AKfycb...`).
-3. أضفه في GitHub Secrets باسم `DEPLOYMENT_ID`.
-
-من الآن كل Push هيحدّث نفس الرابط تلقائياً.
-
-### 7) تشغيل الإعداد الأولي للشيتات
-من محرر Apps Script شغّل **`setupSystem`** مرة واحدة، واعمل Allow للصلاحيات.
-لو الشيتات فيها داتا قديمة شغّل **`migrateSheets`** بدلها.
-
-## الدخول الأولي
+## 3) الدخول الأولي
 - اسم المستخدم: `admin`
-- كلمة المرور: `admin123`
+- كلمة المرور: `admin123` — غيّرها فوراً من صفحة المستخدمين.
 
-غيّرها فوراً من صفحة المستخدمين بإضافة أدمن جديد وحذف الحساب الافتراضي.
+## اختبار الـ API
+افتح رابط الـ API في المتصفح، لازم تشوف:
+`{"ok":true,"message":"API مركز المدار شغال ✅"}`
 
 ## ملاحظات
-- لا تعدّل الكود داخل Apps Script مباشرة، عدّل على GitHub دائماً عشان ما يحصلش تضارب.
-- `CLASPRC_JSON` فيه صلاحيات حسابك، ما تنشرهوش أبداً.
-- الرابط الخاص بالنظام هو رابط **Web app** من Apps Script (`script.google.com/macros/s/.../exec`)، ومش رابط GitHub Pages.
-
-## 🔗 رابط النظام
-```
-https://script.google.com/macros/s/AKfycbxHhFkgmM8cimDrVCEYD7j-PGNNrQNQP7YkbkSCWEn5tsTdHPPuvozWwvvHV631vFmz5w/exec
-```
-الرابط ده بتفتحه في المتصفح عشان تدخل على النظام. ملوش علاقة بالكود، والكود ما بيستخدموش.
-
-> ⚠️ لو الرابط ظهر فيه `No HTML file named Index`، يبقى الكود اللي على الـ deployment ده ما فيهوش ملفات الواجهة. الحل إنك ترفع الكود بالـ Workflow (Push على `main`) والـ deployment يتحدّث.
+- الـ Apps Script مش بيتحدّث من GitHub تلقائياً، لازم تنسخ `Code.gs` يدوي زي الخطوة 1 بعد كل تعديل على الـ API.
+- الواجهة لو اتعدّلت بتتحدّث من GitHub أوتوماتيك.
+- الكود مش فيه أي صلاحيات أو أسرار، بس متشاركش رابط الشيت مع حد من خارج الفريق.
