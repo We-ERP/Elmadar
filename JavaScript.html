@@ -2,13 +2,14 @@
      JavaScript.html — منطق الواجهة (Client-side)
      ============================================================ -->
 <script>
-  /* ---------- 1) الحالة (State) ---------- */
+  /* ---------- 1) الحالة ---------- */
   const state = {
     token: null,
-    me: null,            // { username, role }
+    me: null,
     students: [],
     courses: [],
     stats: {},
+    paymentMethods: [],
     view: 'dashboard',
     courseFilter: '',
     search: ''
@@ -22,11 +23,12 @@
     archive: 'المرور / الأرشيف'
   };
 
+  const MAX_PROOF_BYTES = 5 * 1024 * 1024;
+
   /* ---------- 2) أدوات مساعدة ---------- */
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 
-  // حماية من XSS: أي بيانات جاية من الشيت لازم تتعقم قبل العرض
   function esc(v) {
     return String(v == null ? '' : v).replace(/[&<>"']/g, c => ({
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
@@ -50,7 +52,19 @@
     toastTimer = setTimeout(() => t.classList.add('hidden'), 3200);
   }
 
-  /* ---------- 3) جسر التواصل مع السيرفر (google.script.run) ---------- */
+  // تحويل ملف الإثبات لـ Base64 مع التحقق من الحجم
+  function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      if (!file || !file.size) return resolve('');
+      if (file.size > MAX_PROOF_BYTES) return reject(new Error('حجم الإثبات أكبر من 5 ميجا'));
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(new Error('تعذر قراءة ملف الإثبات'));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  /* ---------- 3) جسر السيرفر ---------- */
   function callServer(fnName, ...args) {
     return new Promise((resolve, reject) => {
       showLoader(true);
@@ -67,7 +81,6 @@
     });
   }
 
-  // نسخة آمنة: تعرض الخطأ وترجع null بدل ما تكسر الواجهة
   async function run(fnName, ...args) {
     try {
       return await callServer(fnName, ...args);
@@ -95,6 +108,20 @@
   function closeModal() {
     $('#modal').classList.add('hidden');
     $('#modalBody').innerHTML = '';
+  }
+
+  // حقول طريقة الدفع + الإثبات (مشتركة بين إضافة مشترك وتسجيل دفعة)
+  function paymentFieldsHtml() {
+    return `
+      <label>طريقة الدفع
+        <select name="paymentMethod">
+          <option value="">— اختر —</option>
+          ${state.paymentMethods.map(m => `<option value="${esc(m)}">${esc(m)}</option>`).join('')}
+        </select>
+      </label>
+      <label>إثبات الدفع (صورة أو PDF، حتى 5 ميجا)
+        <input name="proofFile" type="file" accept="image/*,application/pdf">
+      </label>`;
   }
 
   /* ---------- 5) الدخول والخروج ---------- */
@@ -126,6 +153,7 @@
     state.students = d.students;
     state.courses = d.courses;
     state.stats = d.stats;
+    state.paymentMethods = d.paymentMethods || [];
     renderAll();
   }
 
@@ -136,7 +164,7 @@
     renderStudents();
   }
 
-  /* ---------- 7) الرسم (Rendering) ---------- */
+  /* ---------- 7) الرسم ---------- */
   function renderStats() {
     const s = state.stats;
     const items = [
@@ -199,7 +227,11 @@
         <td><b>${esc(s.name)}</b></td>
         <td><span class="tag">${esc(s.course)}</span></td>
         <td>${money(s.cost)}</td>
-        <td>${money(s.firstPayment)}</td>
+        <td>
+          ${money(s.firstPayment)}
+          ${s.firstMethod ? `<br><small>${esc(s.firstMethod)}</small>` : ''}
+          ${s.firstProof ? `<br><a href="${esc(s.firstProof)}" target="_blank" rel="noopener">📎 الإثبات</a>` : ''}
+        </td>
         <td><span class="strong ${s.remaining > 0 ? 'text-red' : 'text-green'}">${money(s.remaining)}</span></td>
         <td><small>${esc(s.addedBy)}<br>${esc(s.firstDate)}</small></td>
         <td class="actions">
@@ -212,7 +244,7 @@
       : '<tr><td colspan="8" class="empty">لا توجد نتائج</td></tr>';
   }
 
-  /* ---------- 8) تنقّل الواجهات ---------- */
+  /* ---------- 8) التنقل ---------- */
   function setView(name) {
     state.view = name;
     $$('.view').forEach(el => el.classList.toggle('hidden', el.id !== 'view-' + name));
@@ -239,12 +271,36 @@
         </datalist>
         <label>تكلفة الكورس (ج.م)<input name="cost" type="number" min="1" step="0.01" required></label>
         <label>الدفعة الأولى (ج.م)<input name="firstPayment" type="number" min="0" step="0.01" value="0"></label>
+        <small>لو الدفعة الأولى أكبر من صفر لازم تختار طريقة الدفع وترفع الإثبات.</small>
+        ${paymentFieldsHtml()}
         <div class="form-actions">
           <button type="button" class="btn btn-ghost" data-close>إلغاء</button>
           <button class="btn btn-primary">حفظ المشترك</button>
         </div>
       </form>`, async fd => {
-        const r = await run('addStudent', state.token, Object.fromEntries(fd.entries()));
+        const first = Number(fd.get('firstPayment') || 0);
+        const file = fd.get('proofFile');
+        const hasFile = file && file.size > 0;
+
+        if (first > 0 && (!fd.get('paymentMethod') || !hasFile)) {
+          return toast('لازم تختار طريقة الدفع وترفع إثبات الدفعة الأولى', 'error');
+        }
+
+        let proof = '';
+        try {
+          proof = await readFileAsDataUrl(hasFile ? file : null);
+        } catch (e) {
+          return toast(e.message, 'error');
+        }
+
+        const r = await run('addStudent', state.token, {
+          name: fd.get('name'),
+          course: fd.get('course'),
+          cost: fd.get('cost'),
+          firstPayment: fd.get('firstPayment'),
+          paymentMethod: fd.get('paymentMethod'),
+          proof: proof
+        });
         if (r) {
           toast('تمت إضافة المشترك ✅');
           closeModal();
@@ -263,12 +319,24 @@
         <label>المبلغ المدفوع (ج.م)
           <input name="amount" type="number" min="1" max="${s.remaining}" step="0.01" required>
         </label>
+        ${paymentFieldsHtml()}
         <div class="form-actions">
           <button type="button" class="btn btn-ghost" data-close>إلغاء</button>
           <button class="btn btn-primary">تأكيد الدفعة</button>
         </div>
       </form>`, async fd => {
-        const r = await run('addPayment', state.token, s.id, fd.get('amount'));
+        const file = fd.get('proofFile');
+        if (!fd.get('paymentMethod')) return toast('اختار طريقة الدفع', 'error');
+        if (!file || !file.size) return toast('لازم ترفع إثبات الدفع', 'error');
+
+        let proof;
+        try {
+          proof = await readFileAsDataUrl(file);
+        } catch (e) {
+          return toast(e.message, 'error');
+        }
+
+        const r = await run('addPayment', state.token, s.id, fd.get('amount'), fd.get('paymentMethod'), proof);
         if (r) {
           toast('تم تسجيل الدفعة ✅ — المتبقي ' + money(r.remaining));
           closeModal();
@@ -283,7 +351,7 @@
         <label>اسم المشترك<input name="name" required value="${esc(s.name)}"></label>
         <label>اسم الكورس<input name="course" required value="${esc(s.course)}"></label>
         <label>تكلفة الكورس (ج.م)<input name="cost" type="number" min="1" step="0.01" required value="${esc(s.cost)}"></label>
-        <small>ملاحظة: المدفوع حتى الآن (${money(s.cost - s.remaining)}) هيتحسب تلقائياً من التكلفة الجديدة.</small>
+        <small>المدفوع حتى الآن (${money(s.cost - s.remaining)}) هيتحسب تلقائياً من التكلفة الجديدة.</small>
         <div class="form-actions">
           <button type="button" class="btn btn-ghost" data-close>إلغاء</button>
           <button class="btn btn-primary">حفظ التعديل</button>
@@ -302,7 +370,7 @@
     openModal('تأكيد الحذف', `
       <p class="confirm-text">
         هل أنت متأكد من حذف المشترك <b>${esc(s.name)}</b> من كورس <b>${esc(s.course)}</b>؟
-        <br><small>النسخة القديمة هتتأرشف في شيت "المرور/الأرشيف" قبل الحذف.</small>
+        <br><small>النسخة القديمة هتتأرشف في شيت "المرور-الأرشيف" قبل الحذف.</small>
       </p>
       <div class="form-actions">
         <button class="btn btn-ghost" data-close>إلغاء</button>
@@ -341,9 +409,11 @@
         <td><span class="badge">${esc(l.type)}</span></td>
         <td>${esc(l.studentName)}</td>
         <td class="text-green strong">${money(l.paid)}</td>
+        <td>${esc(l.method || '-')}</td>
         <td class="text-red">${money(l.remaining)}</td>
+        <td>${l.proof ? `<a href="${esc(l.proof)}" target="_blank" rel="noopener">📎 عرض</a>` : '-'}</td>
         <td>${esc(l.user)}</td>
-      </tr>`).join('') || '<tr><td colspan="6" class="empty">لا توجد حركات بعد</td></tr>';
+      </tr>`).join('') || '<tr><td colspan="8" class="empty">لا توجد حركات بعد</td></tr>';
   }
 
   async function loadArchive() {
@@ -359,9 +429,8 @@
       </tr>`).join('') || '<tr><td colspan="5" class="empty">الأرشيف فاضي</td></tr>';
   }
 
-  /* ---------- 11) تهيئة الأحداث (Event Binding) ---------- */
+  /* ---------- 11) تهيئة الأحداث ---------- */
   function init() {
-    // تسجيل الدخول
     $('#loginForm').addEventListener('submit', async e => {
       e.preventDefault();
       const r = await run('login', $('#loginUser').value, $('#loginPass').value);
@@ -374,17 +443,13 @@
 
     $('#logoutBtn').addEventListener('click', () => doLogout());
 
-    // التنقل
     $$('.nav-btn').forEach(btn => btn.addEventListener('click', () => setView(btn.dataset.view)));
 
-    // زر إضافة مشترك
     $('#addStudentBtn').addEventListener('click', openAddStudent);
 
-    // البحث والفلترة
     $('#searchInput').addEventListener('input', e => { state.search = e.target.value; renderStudents(); });
     $('#courseFilter').addEventListener('change', e => { state.courseFilter = e.target.value; renderStudents(); });
 
-    // الضغط على كارت الكورس: يفلتر المشتركين
     $('#courseGrid').addEventListener('click', e => {
       const card = e.target.closest('.course-card');
       if (!card) return;
@@ -392,7 +457,6 @@
       setView('students');
     });
 
-    // أزرار جدول المشتركين (Event Delegation)
     $('#studentsBody').addEventListener('click', e => {
       const btn = e.target.closest('button[data-action]');
       if (!btn) return;
@@ -403,7 +467,6 @@
       if (btn.dataset.action === 'delete') openDeleteModal(s);
     });
 
-    // إضافة مستخدم (Admin)
     $('#userForm').addEventListener('submit', async e => {
       e.preventDefault();
       const f = e.target;
@@ -415,7 +478,6 @@
       }
     });
 
-    // حذف مستخدم (Admin)
     $('#usersBody').addEventListener('click', async e => {
       const btn = e.target.closest('button[data-del-user]');
       if (!btn) return;
@@ -427,7 +489,6 @@
       }
     });
 
-    // إغلاق المودال: زر الإغلاق أو الضغط على الخلفية
     $('#modal').addEventListener('click', e => {
       if (e.target.id === 'modal' || e.target.closest('[data-close]')) closeModal();
     });
